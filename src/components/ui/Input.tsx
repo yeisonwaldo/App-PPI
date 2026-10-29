@@ -3,6 +3,7 @@ import {
   View,
   Text,
   TextInput,
+  TextInputInstance,
   TextInputProps,
   TouchableOpacity,
 } from 'react-native';
@@ -17,7 +18,7 @@ interface InputProps extends TextInputProps {
   containerClassName?: string;
 }
 
-export const Input = forwardRef<TextInput, InputProps>(
+export const Input = forwardRef<TextInputInstance, InputProps>(
   (
     {
       label,

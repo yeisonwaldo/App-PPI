@@ -8,20 +8,17 @@ import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Database } from '@/types/database';
 
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
-const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-anon-key';
+// Variables leídas de .env (Expo las inyecta en build time por el prefijo EXPO_PUBLIC_)
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
-export const isSupabaseConfigured = Boolean(
-  process.env.EXPO_PUBLIC_SUPABASE_URL && 
-  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY &&
-  !process.env.EXPO_PUBLIC_SUPABASE_URL.includes('tu-proyecto')
-);
-
-if (!isSupabaseConfigured) {
-  console.warn(
-    '⚠️ Supabase no está configurado aún. Configura EXPO_PUBLIC_SUPABASE_URL y EXPO_PUBLIC_SUPABASE_ANON_KEY en .env'
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  throw new Error(
+    'Faltan EXPO_PUBLIC_SUPABASE_URL y/o EXPO_PUBLIC_SUPABASE_ANON_KEY en .env. Reinicia con `npx expo start -c` tras editarlo.'
   );
 }
+
+export const isSupabaseConfigured = true;
 
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {

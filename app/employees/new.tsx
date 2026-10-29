@@ -292,7 +292,7 @@ export default function NewEmployeeScreen() {
 
         <Button
           title="Guardar Colaborador"
-          onPress={handleSubmit(onSubmit)}
+          onPress={() => handleSubmit(onSubmit)()}
           loading={isSubmitting || createEmployeeMutation.isPending}
           size="lg"
         />

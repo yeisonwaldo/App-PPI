@@ -210,7 +210,7 @@ export default function LoginScreen() {
             {/* Submit button */}
             <Button
               title="Iniciar Sesión"
-              onPress={handleSubmit(onSubmit)}
+              onPress={() => handleSubmit(onSubmit)()}
               loading={isSubmitting}
               size="lg"
             />
