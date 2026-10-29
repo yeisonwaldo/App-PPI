@@ -1,13 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
-import {
-  MOCK_EMPLOYEES,
-  MOCK_PAYROLL_PERIOD,
-  MOCK_DOCUMENTS_VIEW,
-  MOCK_ATTENDANCE_SUMMARY,
-} from '@/lib/mockData';
-import type { EmployeeDocumentView } from '@/types/database';
+import type { EmployeeDocumentView, Notification } from '@/types/database';
+import { formatDate } from '@/lib/formatters';
 
 export interface DashboardMetrics {
   activeEmployees: number;
@@ -17,115 +12,141 @@ export interface DashboardMetrics {
   expiringDocuments: EmployeeDocumentView[];
   attendancePresent: number;
   attendanceTotal: number;
+  pendingLeavesCount: number;
   recentActivities: Array<{
     id: string;
     title: string;
     subtitle: string;
     timestamp: string;
-    type: 'document' | 'payroll' | 'attendance' | 'employee';
+    type: 'document' | 'payroll' | 'attendance' | 'employee' | 'system';
   }>;
 }
 
 export function useDashboardMetrics() {
-  const { profile, isDemoMode } = useAuthStore();
+  const { profile, user } = useAuthStore();
 
   return useQuery({
-    queryKey: ['dashboard_metrics', profile?.company_id, isDemoMode],
+    queryKey: ['dashboard_metrics', profile?.company_id],
     queryFn: async (): Promise<DashboardMetrics> => {
-      if (!isSupabaseConfigured || isDemoMode) {
+      const companyId = profile?.company_id;
+      if (!companyId) {
         return {
-          activeEmployees: MOCK_EMPLOYEES.filter((e) => e.status === 'active').length,
-          monthlyPayrollTotal: MOCK_PAYROLL_PERIOD.total_net ?? 39422000,
-          totalDocuments: MOCK_DOCUMENTS_VIEW.length,
-          expiringDocumentsCount: MOCK_DOCUMENTS_VIEW.filter(
-            (d) => d.status === 'por_vencer' || d.status === 'vencido'
-          ).length,
-          expiringDocuments: MOCK_DOCUMENTS_VIEW,
-          attendancePresent: MOCK_ATTENDANCE_SUMMARY.present,
-          attendanceTotal: MOCK_ATTENDANCE_SUMMARY.totalEmployees,
-          recentActivities: [
-            {
-              id: '1',
-              title: 'Certificado de Alturas por vencer',
-              subtitle: 'Carlos Andrés Restrepo Montoya • Vence en 5 días',
-              timestamp: 'Hace 2 horas',
-              type: 'document',
-            },
-            {
-              id: '2',
-              title: 'Nómina 1ra Quincena Octubre calculada',
-              subtitle: 'Total neto: $ 39.422.000 COP • 25 colaboradores',
-              timestamp: 'Hoy, 09:30 AM',
-              type: 'payroll',
-            },
-            {
-              id: '3',
-              title: 'Asistencia de obra registrada',
-              subtitle: '22 presentes • 1 tardanza • 1 ausencia',
-              timestamp: 'Hoy, 07:15 AM',
-              type: 'attendance',
-            },
-            {
-              id: '4',
-              title: 'Nuevo empleado contratado',
-              subtitle: 'Brayan Estiven Cano Morales • Ayudante de Obra',
-              timestamp: 'Ayer',
-              type: 'employee',
-            },
-          ],
+          activeEmployees: 0,
+          monthlyPayrollTotal: 0,
+          totalDocuments: 0,
+          expiringDocumentsCount: 0,
+          expiringDocuments: [],
+          attendancePresent: 0,
+          attendanceTotal: 0,
+          pendingLeavesCount: 0,
+          recentActivities: [],
         };
       }
 
-      // Supabase live queries
-      const companyId = profile?.company_id;
+      const todayStr = new Date().toISOString().split('T')[0]!;
 
-      // 1. Empleados activos
-      const { count: activeEmployees } = await supabase
-        .from('employees')
-        .select('*', { count: 'exact', head: true })
-        .eq('company_id', companyId!)
-        .eq('status', 'active');
+      // 1. Llamar RPC get_dashboard_metrics() si está disponible o consultas en paralelo
+      const [
+        empCountRes,
+        latestPayrollRes,
+        expiringDocsRes,
+        totalDocsRes,
+        todayAttRes,
+        pendingLeavesRes,
+        recentNotifsRes,
+      ] = await Promise.all([
+        supabase
+          .from('employees')
+          .select('*', { count: 'exact', head: true })
+          .eq('company_id', companyId)
+          .eq('status', 'active'),
+        supabase
+          .from('payroll_periods')
+          .select('*')
+          .eq('company_id', companyId)
+          .order('end_date', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from('employee_documents_view')
+          .select('*')
+          .eq('company_id', companyId)
+          .in('status', ['por_vencer', 'vencido'])
+          .order('expiry_date', { ascending: true })
+          .limit(5),
+        supabase
+          .from('employee_documents_view')
+          .select('*', { count: 'exact', head: true })
+          .eq('company_id', companyId),
+        supabase
+          .from('attendance_records')
+          .select('id, status, employees!inner(company_id)')
+          .eq('employees.company_id', companyId)
+          .eq('work_date', todayStr),
+        supabase
+          .from('leave_requests')
+          .select('id, employees!inner(company_id)', { count: 'exact', head: true })
+          .eq('employees.company_id', companyId)
+          .eq('status', 'pending'),
+        user?.id
+          ? supabase
+              .from('notifications')
+              .select('*')
+              .eq('user_id', user.id)
+              .order('created_at', { ascending: false })
+              .limit(4)
+          : Promise.resolve({ data: [] as Notification[] }),
+      ]);
 
-      // 2. Última nómina
-      const { data: latestPayroll } = await (supabase
-        .from('payroll_periods') as any)
-        .select('*')
-        .eq('company_id', companyId!)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      const activeEmployees = empCountRes.count ?? 0;
+      const latestPayroll = latestPayrollRes.data as any;
+      const expiringDocs = (expiringDocsRes.data as EmployeeDocumentView[]) ?? [];
+      const totalDocs = totalDocsRes.count ?? 0;
+      const todayRecords = (todayAttRes.data as any[]) ?? [];
+      const presentToday = todayRecords.filter(
+        (r) => r.status === 'present' || r.status === 'late'
+      ).length;
+      const pendingLeavesCount = pendingLeavesRes.count ?? 0;
+      const notifs = (recentNotifsRes.data as Notification[]) ?? [];
 
-      // 3. Documentos por vencer / vencidos
-      const { data: expiringDocs } = await (supabase
-        .from('employee_documents_view') as any)
-        .select('*')
-        .eq('company_id', companyId!)
-        .in('status', ['por_vencer', 'vencido'])
-        .limit(5);
-
-      const { count: totalDocs } = await (supabase
-        .from('employee_documents_view') as any)
-        .select('*', { count: 'exact', head: true })
-        .eq('company_id', companyId!);
+      const recentActivities =
+        notifs.length > 0
+          ? notifs.map((n) => ({
+              id: n.id,
+              title: n.title,
+              subtitle: n.message,
+              timestamp: formatDate(n.created_at),
+              type:
+                n.type === 'document_expiry'
+                  ? ('document' as const)
+                  : n.type === 'payroll'
+                  ? ('payroll' as const)
+                  : n.type === 'attendance' || n.type === 'leave_request'
+                  ? ('attendance' as const)
+                  : ('system' as const),
+            }))
+          : [
+              {
+                id: 'sys-1',
+                title: 'Sincronización con Supabase activa',
+                subtitle: `${activeEmployees} empleados activos • ${totalDocs} documentos registrados`,
+                timestamp: 'En tiempo real',
+                type: 'system' as const,
+              },
+            ];
 
       return {
-        activeEmployees: activeEmployees ?? 0,
-        monthlyPayrollTotal: (latestPayroll as any)?.total_net ?? 0,
-        totalDocuments: totalDocs ?? 0,
-        expiringDocumentsCount: expiringDocs?.length ?? 0,
-        expiringDocuments: (expiringDocs as EmployeeDocumentView[]) ?? [],
-        attendancePresent: 22,
-        attendanceTotal: activeEmployees ?? 25,
-        recentActivities: [
-          {
-            id: '1',
-            title: 'Sincronización con base de datos activa',
-            subtitle: `Empresa: ${profile?.full_name ?? 'Administrador'}`,
-            timestamp: 'En tiempo real',
-            type: 'system' as any,
-          },
-        ],
+        activeEmployees,
+        monthlyPayrollTotal: Number(latestPayroll?.total_net ?? 0),
+        totalDocuments: totalDocs,
+        expiringDocumentsCount: expiringDocs.length,
+        expiringDocuments: expiringDocs,
+        attendancePresent: presentToday,
+        attendanceTotal: activeEmployees,
+        pendingLeavesCount,
+        recentActivities,
       };
     },
+    enabled: Boolean(profile?.company_id),
   });
 }

@@ -20,12 +20,11 @@ import {
   EyeOff,
   HardHat,
   ArrowLeft,
-  Sparkles,
 } from 'lucide-react-native';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useAuthStore } from '@/stores/authStore';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 
 const loginSchema = z.object({
   email: z.string().email('Ingresa un correo electrónico válido'),
@@ -36,7 +35,7 @@ type LoginFormData = z.infer<typeof loginSchema>;
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { signIn, enableDemoMode } = useAuthStore();
+  const { signIn } = useAuthStore();
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -48,8 +47,8 @@ export default function LoginScreen() {
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      email: 'admin@construpay.co',
-      password: 'AdminPassword123*',
+      email: 'admin@constructoraandina.com',
+      password: 'Construpay2026!',
     },
   });
 
@@ -74,9 +73,7 @@ export default function LoginScreen() {
           'Ingresa tu correo para enviarte el enlace de restablecimiento:',
           async (email) => {
             if (!email) return;
-            if (isSupabaseConfigured) {
-              await supabase.auth.resetPasswordForEmail(email);
-            }
+            await supabase.auth.resetPasswordForEmail(email);
             Alert.alert(
               'Enlace Enviado',
               'Si el correo está registrado, recibirás un correo con las instrucciones.'
@@ -89,14 +86,9 @@ export default function LoginScreen() {
         );
   };
 
-  const handleFillAdminDemo = () => {
-    setValue('email', 'admin@construpay.co');
-    setValue('password', 'AdminPassword123*');
-  };
-
-  const handleInstantDemo = () => {
-    enableDemoMode();
-    router.replace('/(app)/(tabs)');
+  const handleFillSeedUser = (email: string) => {
+    setValue('email', email);
+    setValue('password', 'Construpay2026!');
   };
 
   return (
@@ -117,15 +109,6 @@ export default function LoginScreen() {
             >
               <ArrowLeft size={20} color="#334155" />
             </TouchableOpacity>
-            <TouchableOpacity
-              onPress={handleInstantDemo}
-              className="flex-row items-center px-3 py-1.5 rounded-full bg-blue-50 border border-blue-200"
-            >
-              <Sparkles size={14} color="#1A56DB" className="mr-1.5" />
-              <Text className="text-xs font-semibold text-blue-700">
-                Acceso Rápido Demo
-              </Text>
-            </TouchableOpacity>
           </View>
 
           {/* Form Container */}
@@ -139,7 +122,7 @@ export default function LoginScreen() {
                 Bienvenido a Constru<Text className="text-blue-600">pay</Text>
               </Text>
               <Text className="text-sm text-slate-500 mt-1 text-center">
-                Ingresa con tus credenciales de Administrador o RRHH
+                Ingresa con tus credenciales de Supabase Auth
               </Text>
             </View>
 
@@ -159,7 +142,7 @@ export default function LoginScreen() {
               render={({ field: { onChange, onBlur, value } }) => (
                 <Input
                   label="Correo Electrónico"
-                  placeholder="ej. talento@constructora.com"
+                  placeholder="ej. admin@constructoraandina.com"
                   autoCapitalize="none"
                   keyboardType="email-address"
                   autoComplete="email"
@@ -215,23 +198,33 @@ export default function LoginScreen() {
               size="lg"
             />
 
-            {/* Demo credentials helper card */}
+            {/* Seed credentials helper card */}
             <View className="mt-8 bg-blue-50/70 border border-blue-200/80 rounded-2xl p-4">
-              <View className="flex-row items-center justify-between mb-1.5">
-                <Text className="text-xs font-bold text-blue-900 uppercase tracking-wider">
-                  Cuenta de Prueba (Admin)
-                </Text>
-                <TouchableOpacity onPress={handleFillAdminDemo}>
-                  <Text className="text-[11px] font-bold text-blue-600 underline">
-                    Auto-completar
-                  </Text>
+              <Text className="text-xs font-bold text-blue-900 uppercase tracking-wider mb-2">
+                Usuarios de Prueba en Supabase
+              </Text>
+              <View className="flex-row flex-wrap gap-2 mb-2">
+                <TouchableOpacity
+                  onPress={() => handleFillSeedUser('admin@constructoraandina.com')}
+                  className="bg-white px-2.5 py-1.5 rounded-lg border border-blue-200"
+                >
+                  <Text className="text-[11px] font-bold text-blue-700">Admin</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => handleFillSeedUser('projas@andina.com')}
+                  className="bg-white px-2.5 py-1.5 rounded-lg border border-blue-200"
+                >
+                  <Text className="text-[11px] font-bold text-blue-700">RRHH</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => handleFillSeedUser('jgarcia@andina.com')}
+                  className="bg-white px-2.5 py-1.5 rounded-lg border border-blue-200"
+                >
+                  <Text className="text-[11px] font-bold text-blue-700">Supervisor</Text>
                 </TouchableOpacity>
               </View>
-              <Text className="text-xs text-blue-800">
-                Email: <Text className="font-semibold">admin@construpay.co</Text>
-              </Text>
-              <Text className="text-xs text-blue-800">
-                Clave: <Text className="font-semibold">AdminPassword123*</Text>
+              <Text className="text-[11px] text-blue-800">
+                Clave: <Text className="font-semibold">Construpay2026!</Text>
               </Text>
             </View>
           </View>

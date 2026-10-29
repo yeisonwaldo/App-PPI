@@ -13,27 +13,25 @@ import {
   Briefcase,
   Phone,
   Mail,
-  Calendar,
-  CreditCard,
-  Building,
-  Shield,
   FileText,
-  Banknote,
   Trash2,
-  Edit3,
-  CheckCircle2,
 } from 'lucide-react-native';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { useEmployee, useUpdateEmployee, useDeleteEmployee } from '@/features/employees/useEmployees';
+import {
+  useEmployee,
+  useUpdateEmployee,
+  useDeleteEmployee,
+} from '@/features/employees/useEmployees';
+import { useDocuments } from '@/features/documents/useDocuments';
+import { useCompanySettings } from '@/features/settings/useSettings';
 import {
   formatCOP,
   formatDate,
   getEmployeeStatusInfo,
   getDocumentStatusInfo,
 } from '@/lib/formatters';
-import { MOCK_DOCUMENTS_VIEW } from '@/lib/mockData';
 import type { EmployeeStatus } from '@/types/database';
 
 export default function EmployeeDetailScreen() {
@@ -42,6 +40,11 @@ export default function EmployeeDetailScreen() {
   const [activeTab, setActiveTab] = useState<'info' | 'docs' | 'payroll'>('info');
 
   const { data: employee, isLoading } = useEmployee(id);
+  const { data: employeeDocs = [], isLoading: loadingDocs } = useDocuments({
+    employeeId: id,
+  });
+  const { data: company } = useCompanySettings();
+
   const updateMutation = useUpdateEmployee();
   const deleteMutation = useDeleteEmployee();
 
@@ -66,14 +69,20 @@ export default function EmployeeDetailScreen() {
 
   const statusInfo = getEmployeeStatusInfo(employee.status);
 
-  // Cálculos preliminares de nómina para este empleado en COP
-  const baseSalary = Number(employee.base_salary);
-  const transportAllowance = baseSalary <= 2600000 ? 162000 : 0;
-  const healthDeduction = baseSalary * 0.04;
-  const pensionDeduction = baseSalary * 0.04;
-  const netEstimated = baseSalary + transportAllowance - (healthDeduction + pensionDeduction);
+  // Parámetros de nómina desde companies.payroll_settings en Supabase
+  const settings = company?.payroll_settings;
+  const salarioMinimo = settings?.salario_minimo ?? 1300000;
+  const auxTransporte = settings?.auxilio_transporte ?? 162000;
+  const pctSalud = (settings?.pct_salud_empleado ?? 4) / 100;
+  const pctPension = (settings?.pct_pension_empleado ?? 4) / 100;
 
-  const employeeDocs = MOCK_DOCUMENTS_VIEW.filter((d) => d.employee_id === employee.id);
+  const baseSalary = Number(employee.base_salary);
+  const transportAllowance =
+    baseSalary <= salarioMinimo * 2 ? auxTransporte : 0;
+  const healthDeduction = baseSalary * pctSalud;
+  const pensionDeduction = baseSalary * pctPension;
+  const netEstimated =
+    baseSalary + transportAllowance - (healthDeduction + pensionDeduction);
 
   const handleChangeStatus = (newStatus: EmployeeStatus) => {
     Alert.alert(
@@ -89,7 +98,7 @@ export default function EmployeeDetailScreen() {
                 id: employee.id,
                 data: { status: newStatus },
               });
-              Alert.alert('Éxito', 'Estado actualizado correctamente.');
+              Alert.alert('Éxito', 'Estado actualizado en Supabase.');
             } catch (err: any) {
               Alert.alert('Error', err.message);
             }
@@ -111,7 +120,7 @@ export default function EmployeeDetailScreen() {
           onPress: async () => {
             try {
               await deleteMutation.mutateAsync(employee.id);
-              Alert.alert('Eliminado', 'El colaborador fue retirado del sistema.', [
+              Alert.alert('Eliminado', 'El colaborador fue retirado de Supabase.', [
                 { text: 'Aceptar', onPress: () => router.back() },
               ]);
             } catch (err: any) {
@@ -180,7 +189,7 @@ export default function EmployeeDetailScreen() {
               activeTab === 'docs' ? 'text-blue-700' : 'text-slate-600'
             }`}
           >
-            Documentos
+            Documentos ({employeeDocs.length})
           </Text>
         </TouchableOpacity>
 
@@ -252,25 +261,25 @@ export default function EmployeeDetailScreen() {
             <View className="flex-row items-center justify-between mb-2">
               <Text className="text-xs text-slate-500">EPS</Text>
               <Text className="text-xs font-semibold text-slate-800">
-                {employee.eps || 'Sura EPS'}
+                {employee.eps || 'No aplica / Contratista'}
               </Text>
             </View>
             <View className="flex-row items-center justify-between mb-2">
               <Text className="text-xs text-slate-500">Fondo de Pensión</Text>
               <Text className="text-xs font-semibold text-slate-800">
-                {employee.pension_fund || 'Protección'}
+                {employee.pension_fund || 'No aplica / Contratista'}
               </Text>
             </View>
             <View className="flex-row items-center justify-between mb-2">
               <Text className="text-xs text-slate-500">ARL</Text>
               <Text className="text-xs font-semibold text-slate-800">
-                {employee.arl || 'Sura ARL'}
+                {employee.arl || 'No aplica / Contratista'}
               </Text>
             </View>
             <View className="flex-row items-center justify-between">
               <Text className="text-xs text-slate-500">Fondo Cesantías</Text>
               <Text className="text-xs font-semibold text-slate-800">
-                {employee.cesantias_fund || 'Protección'}
+                {employee.cesantias_fund || 'No aplica / Contratista'}
               </Text>
             </View>
           </Card>
@@ -316,17 +325,19 @@ export default function EmployeeDetailScreen() {
         <View>
           <View className="flex-row items-center justify-between mb-3">
             <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-              Documentación Laboral y SST
+              Documentación en Supabase
             </Text>
             <TouchableOpacity
               onPress={() => router.push('/documents')}
               className="flex-row items-center"
             >
-              <Text className="text-xs font-bold text-blue-600">Subir Nuevo</Text>
+              <Text className="text-xs font-bold text-blue-600">Subir / Gestionar</Text>
             </TouchableOpacity>
           </View>
 
-          {employeeDocs.length === 0 ? (
+          {loadingDocs ? (
+            <ActivityIndicator size="small" color="#1A56DB" className="py-6" />
+          ) : employeeDocs.length === 0 ? (
             <Card className="items-center py-8">
               <FileText size={32} color="#94A3B8" className="mb-2" />
               <Text className="text-xs text-slate-500">
@@ -335,7 +346,10 @@ export default function EmployeeDetailScreen() {
             </Card>
           ) : (
             employeeDocs.map((doc) => {
-              const statusInfo = getDocumentStatusInfo(doc.expiry_date);
+              const statusInfo = getDocumentStatusInfo(
+                doc.expiry_date,
+                doc.alert_days_before
+              );
               return (
                 <Card key={doc.id} className="p-4 mb-3">
                   <View className="flex-row items-start justify-between mb-2">
@@ -373,7 +387,7 @@ export default function EmployeeDetailScreen() {
         <View>
           <Card className="p-4 mb-4">
             <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
-              Desglose Quincenal Estimado (Colombia)
+              Desglose Quincenal Estimado (según configuración de empresa)
             </Text>
 
             <View className="space-y-2">
@@ -392,14 +406,18 @@ export default function EmployeeDetailScreen() {
               </View>
 
               <View className="border-t border-slate-100 pt-2 flex-row justify-between mb-2">
-                <Text className="text-xs text-rose-600">Deducción Salud (4%)</Text>
+                <Text className="text-xs text-rose-600">
+                  Deducción Salud ({settings?.pct_salud_empleado ?? 4}%)
+                </Text>
                 <Text className="text-xs font-bold text-rose-600">
                   - {formatCOP(healthDeduction / 2)}
                 </Text>
               </View>
 
               <View className="flex-row justify-between mb-3">
-                <Text className="text-xs text-rose-600">Deducción Pensión (4%)</Text>
+                <Text className="text-xs text-rose-600">
+                  Deducción Pensión ({settings?.pct_pension_empleado ?? 4}%)
+                </Text>
                 <Text className="text-xs font-bold text-rose-600">
                   - {formatCOP(pensionDeduction / 2)}
                 </Text>

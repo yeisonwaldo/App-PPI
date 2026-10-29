@@ -1,42 +1,94 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
-  Building2,
-  Sliders,
-  User,
   LogOut,
   Save,
-  CheckCircle2,
 } from 'lucide-react-native';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useAuthStore } from '@/stores/authStore';
-import { MOCK_COMPANY } from '@/lib/mockData';
-import { formatCOP } from '@/lib/formatters';
+import {
+  useCompanySettings,
+  useUpdateCompanySettings,
+} from '@/features/settings/useSettings';
+import type { PayrollSettings } from '@/types/database';
+
+const DEFAULT_PAYROLL_SETTINGS: PayrollSettings = {
+  salario_minimo: 1300000,
+  auxilio_transporte: 162000,
+  pct_salud_empleado: 4,
+  pct_pension_empleado: 4,
+  pct_salud_empleador: 8.5,
+  pct_pension_empleador: 12,
+  pct_arl: 0.522,
+  pct_hora_extra_diurna: 25,
+  pct_hora_extra_nocturna: 75,
+  pct_recargo_nocturno: 35,
+  pct_hora_extra_dominical_festivo: 100,
+  horas_jornada_diaria: 8,
+  dias_laborales_mes: 30,
+};
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const { profile, signOut } = useAuthStore();
-  const [company, setCompany] = useState(MOCK_COMPANY);
-  const [isSaving, setIsSaving] = useState(false);
+  const { signOut } = useAuthStore();
+  const { data: companyData, isLoading } = useCompanySettings();
+  const updateMutation = useUpdateCompanySettings();
 
-  const handleSaveSettings = () => {
-    setIsSaving(true);
-    setTimeout(() => {
-      setIsSaving(false);
+  const [name, setName] = useState('');
+  const [nit, setNit] = useState('');
+  const [city, setCity] = useState('');
+  const [address, setAddress] = useState('');
+  const [email, setEmail] = useState('');
+  const [payrollSettings, setPayrollSettings] = useState<PayrollSettings>(
+    DEFAULT_PAYROLL_SETTINGS
+  );
+
+  useEffect(() => {
+    if (companyData) {
+      setName(companyData.name || '');
+      setNit(companyData.nit || '');
+      setCity(companyData.city || '');
+      setAddress(companyData.address || '');
+      setEmail(companyData.email || '');
+      if (companyData.payroll_settings) {
+        setPayrollSettings({
+          ...DEFAULT_PAYROLL_SETTINGS,
+          ...companyData.payroll_settings,
+        });
+      }
+    }
+  }, [companyData]);
+
+  const handleSaveSettings = async () => {
+    try {
+      await updateMutation.mutateAsync({
+        name: name.trim(),
+        nit: nit.trim(),
+        city: city.trim() || null,
+        address: address.trim() || null,
+        email: email.trim() || null,
+        payroll_settings: payrollSettings,
+      });
       Alert.alert(
         'Configuración Guardada',
-        'Los parámetros de nómina y los datos corporativos se actualizaron correctamente.'
+        'Los datos corporativos y parámetros de nómina se actualizaron en Supabase.'
       );
-    }, 600);
+    } catch (err: any) {
+      Alert.alert(
+        'Error al Guardar',
+        err.message || 'Verifica que tu usuario tenga rol de Administrador.'
+      );
+    }
   };
 
   const handleSignOut = () => {
@@ -53,6 +105,14 @@ export default function SettingsScreen() {
     ]);
   };
 
+  if (isLoading) {
+    return (
+      <View className="flex-1 items-center justify-center bg-slate-50">
+        <ActivityIndicator size="large" color="#1A56DB" />
+      </View>
+    );
+  }
+
   return (
     <ScrollView
       className="flex-1 bg-slate-50"
@@ -63,7 +123,7 @@ export default function SettingsScreen() {
           Configuración del Sistema
         </Text>
         <Text className="text-xs text-slate-500">
-          Parámetros legales de nómina y datos corporativos
+          Parámetros legales de nómina y datos corporativos en Supabase
         </Text>
       </View>
 
@@ -74,61 +134,55 @@ export default function SettingsScreen() {
       <Card className="p-4 mb-5">
         <Input
           label="Razón Social"
-          value={company.name}
-          onChangeText={(val) => setCompany({ ...company, name: val })}
+          value={name}
+          onChangeText={setName}
         />
         <Input
           label="NIT"
-          value={company.nit}
-          onChangeText={(val) => setCompany({ ...company, nit: val })}
+          value={nit}
+          onChangeText={setNit}
         />
         <Input
           label="Ciudad"
-          value={company.city || ''}
-          onChangeText={(val) => setCompany({ ...company, city: val })}
+          value={city}
+          onChangeText={setCity}
         />
         <Input
           label="Dirección"
-          value={company.address || ''}
-          onChangeText={(val) => setCompany({ ...company, address: val })}
+          value={address}
+          onChangeText={setAddress}
         />
         <Input
           label="Correo Corporativo"
-          value={company.email || ''}
-          onChangeText={(val) => setCompany({ ...company, email: val })}
+          value={email}
+          onChangeText={setEmail}
         />
       </Card>
 
-      {/* Parámetros de nómina configurables (NO hardcodeados) */}
+      {/* Parámetros de nómina configurables */}
       <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-        Parámetros de Nómina (Configurables)
+        Parámetros de Nómina (companies.payroll_settings)
       </Text>
       <Card className="p-4 mb-5">
         <Input
           label="Salario Mínimo Legal Mensual (COP)"
-          value={String(company.payroll_settings.salario_minimo)}
+          value={String(payrollSettings.salario_minimo)}
           keyboardType="numeric"
           onChangeText={(val) =>
-            setCompany({
-              ...company,
-              payroll_settings: {
-                ...company.payroll_settings,
-                salario_minimo: Number(val) || 0,
-              },
+            setPayrollSettings({
+              ...payrollSettings,
+              salario_minimo: Number(val) || 0,
             })
           }
         />
         <Input
           label="Auxilio de Transporte (COP)"
-          value={String(company.payroll_settings.auxilio_transporte)}
+          value={String(payrollSettings.auxilio_transporte)}
           keyboardType="numeric"
           onChangeText={(val) =>
-            setCompany({
-              ...company,
-              payroll_settings: {
-                ...company.payroll_settings,
-                auxilio_transporte: Number(val) || 0,
-              },
+            setPayrollSettings({
+              ...payrollSettings,
+              auxilio_transporte: Number(val) || 0,
             })
           }
         />
@@ -136,15 +190,12 @@ export default function SettingsScreen() {
           <View className="flex-1">
             <Input
               label="% Salud Empleado"
-              value={String(company.payroll_settings.pct_salud_empleado)}
+              value={String(payrollSettings.pct_salud_empleado)}
               keyboardType="numeric"
               onChangeText={(val) =>
-                setCompany({
-                  ...company,
-                  payroll_settings: {
-                    ...company.payroll_settings,
-                    pct_salud_empleado: Number(val) || 0,
-                  },
+                setPayrollSettings({
+                  ...payrollSettings,
+                  pct_salud_empleado: Number(val) || 0,
                 })
               }
             />
@@ -152,15 +203,12 @@ export default function SettingsScreen() {
           <View className="flex-1">
             <Input
               label="% Pensión Empleado"
-              value={String(company.payroll_settings.pct_pension_empleado)}
+              value={String(payrollSettings.pct_pension_empleado)}
               keyboardType="numeric"
               onChangeText={(val) =>
-                setCompany({
-                  ...company,
-                  payroll_settings: {
-                    ...company.payroll_settings,
-                    pct_pension_empleado: Number(val) || 0,
-                  },
+                setPayrollSettings({
+                  ...payrollSettings,
+                  pct_pension_empleado: Number(val) || 0,
                 })
               }
             />
@@ -171,15 +219,12 @@ export default function SettingsScreen() {
           <View className="flex-1">
             <Input
               label="% Hora Extra Diurna"
-              value={String(company.payroll_settings.pct_hora_extra_diurna)}
+              value={String(payrollSettings.pct_hora_extra_diurna)}
               keyboardType="numeric"
               onChangeText={(val) =>
-                setCompany({
-                  ...company,
-                  payroll_settings: {
-                    ...company.payroll_settings,
-                    pct_hora_extra_diurna: Number(val) || 0,
-                  },
+                setPayrollSettings({
+                  ...payrollSettings,
+                  pct_hora_extra_diurna: Number(val) || 0,
                 })
               }
             />
@@ -187,15 +232,12 @@ export default function SettingsScreen() {
           <View className="flex-1">
             <Input
               label="% Hora Extra Nocturna"
-              value={String(company.payroll_settings.pct_hora_extra_nocturna)}
+              value={String(payrollSettings.pct_hora_extra_nocturna)}
               keyboardType="numeric"
               onChangeText={(val) =>
-                setCompany({
-                  ...company,
-                  payroll_settings: {
-                    ...company.payroll_settings,
-                    pct_hora_extra_nocturna: Number(val) || 0,
-                  },
+                setPayrollSettings({
+                  ...payrollSettings,
+                  pct_hora_extra_nocturna: Number(val) || 0,
                 })
               }
             />
@@ -205,11 +247,11 @@ export default function SettingsScreen() {
 
       {/* Guardar cambios */}
       <Button
-        title="Guardar Cambios"
+        title="Guardar Cambios en Supabase"
         variant="primary"
         size="lg"
         icon={<Save size={18} color="#FFFFFF" />}
-        loading={isSaving}
+        loading={updateMutation.isPending}
         onPress={handleSaveSettings}
         className="mb-6"
       />

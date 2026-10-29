@@ -19,7 +19,6 @@ import {
   UserPlus,
   ArrowUpRight,
   Bell,
-  Sparkles,
   HardHat,
 } from 'lucide-react-native';
 import { MetricCard } from '@/components/ui/MetricCard';
@@ -27,12 +26,16 @@ import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { useAuthStore } from '@/stores/authStore';
 import { useDashboardMetrics } from '@/features/dashboard/useDashboardMetrics';
+import { useNotifications } from '@/features/notifications/useNotifications';
 import { formatCOP, getDocumentStatusInfo } from '@/lib/formatters';
 
 export default function DashboardScreen() {
   const router = useRouter();
-  const { profile, isDemoMode } = useAuthStore();
+  const { profile } = useAuthStore();
   const { data: metrics, isLoading, refetch, isRefetching } = useDashboardMetrics();
+  const { data: notifications = [] } = useNotifications();
+
+  const unreadCount = notifications.filter((n) => !n.read).length;
 
   return (
     <SafeAreaView className="flex-1 bg-slate-50">
@@ -41,7 +44,9 @@ export default function DashboardScreen() {
         refreshControl={
           <RefreshControl
             refreshing={isRefetching}
-            onRefresh={() => { refetch(); }}
+            onRefresh={() => {
+              refetch();
+            }}
             tintColor="#1A56DB"
           />
         }
@@ -55,10 +60,16 @@ export default function DashboardScreen() {
             </View>
             <View className="flex-1">
               <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                {profile?.role === 'admin' ? 'Administrador' : 'Gestión Humana'}
+                {profile?.role === 'admin'
+                  ? 'Administrador'
+                  : profile?.role === 'hr'
+                  ? 'Gestión Humana'
+                  : profile?.role === 'supervisor'
+                  ? 'Supervisor de Obra'
+                  : 'Colaborador'}
               </Text>
               <Text className="text-lg font-bold text-slate-900" numberOfLines={1}>
-                {profile?.full_name || 'Alejandro Morales'}
+                {profile?.full_name || 'Usuario'}
               </Text>
             </View>
           </View>
@@ -69,22 +80,12 @@ export default function DashboardScreen() {
               className="w-10 h-10 rounded-full bg-white border border-slate-200 items-center justify-center shadow-sm relative"
             >
               <Bell size={18} color="#475569" />
-              <View className="w-2 h-2 rounded-full bg-rose-500 absolute top-2.5 right-2.5" />
+              {unreadCount > 0 && (
+                <View className="w-2.5 h-2.5 rounded-full bg-rose-500 absolute top-2 right-2" />
+              )}
             </TouchableOpacity>
           </View>
         </View>
-
-        {/* Demo Mode Notice Banner */}
-        {isDemoMode && (
-          <View className="mx-5 mb-4 p-3 bg-amber-50 border border-amber-200 rounded-2xl flex-row items-center justify-between">
-            <View className="flex-row items-center flex-1 mr-2">
-              <Sparkles size={16} color="#D97706" className="mr-2" />
-              <Text className="text-xs text-amber-900 font-medium">
-                Modo Demostración activo • Constructora Bolívar S.A.S.
-              </Text>
-            </View>
-          </View>
-        )}
 
         {/* KPI Metrics Grid */}
         <View className="px-3.5 mb-5">
@@ -99,7 +100,7 @@ export default function DashboardScreen() {
             <MetricCard
               title="Nómina del Mes"
               value={isLoading ? '...' : formatCOP(metrics?.monthlyPayrollTotal)}
-              subtitle="Neto proyectado"
+              subtitle="Neto calculado"
               icon={<Banknote size={20} color="#059669" />}
               iconBgColor="bg-emerald-50"
             />
@@ -180,13 +181,16 @@ export default function DashboardScreen() {
           ) : !metrics?.expiringDocuments?.length ? (
             <Card className="items-center py-6">
               <Text className="text-xs text-slate-500">
-                No hay alertas de vencimiento en los próximos 30 días.
+                No hay alertas de vencimiento pendientes en Supabase.
               </Text>
             </Card>
           ) : (
             <View className="space-y-2.5">
               {metrics.expiringDocuments.slice(0, 3).map((doc) => {
-                const statusInfo = getDocumentStatusInfo(doc.expiry_date);
+                const statusInfo = getDocumentStatusInfo(
+                  doc.expiry_date,
+                  doc.alert_days_before
+                );
                 return (
                   <TouchableOpacity
                     key={doc.id}

@@ -572,21 +572,30 @@ export interface Database {
           p_period_id: string;
         };
         Returns: {
-          total_employees: number;
-          total_earned: number;
-          total_deductions: number;
-          total_net: number;
+          success: boolean;
+          period_id: string;
+          employees: number;
+          calculated_at: string;
         };
       };
-      mark_payroll_paid: {
-        Args: {
-          p_period_id: string;
-        };
-        Returns: boolean;
-      };
-      check_document_expirations: {
+      check_document_expiry: {
         Args: Record<string, never>;
-        Returns: number;
+        Returns: {
+          success: boolean;
+          notifications_created: number;
+          checked_at: string;
+        };
+      };
+      get_dashboard_metrics: {
+        Args: Record<string, never>;
+        Returns: {
+          active_employees: number;
+          monthly_payroll: number;
+          total_documents: number;
+          today_attendance: number;
+          expiring_documents: number;
+          pending_leaves: number;
+        };
       };
     };
   };

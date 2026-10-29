@@ -4,7 +4,7 @@ import { View, ActivityIndicator } from 'react-native';
 import { useAuthStore } from '@/stores/authStore';
 
 export default function AppLayout() {
-  const { user, profile, isDemoMode, isLoading, isInitialized } = useAuthStore();
+  const { user, profile, isLoading, isInitialized } = useAuthStore();
 
   if (!isInitialized || isLoading) {
     return (
@@ -14,8 +14,8 @@ export default function AppLayout() {
     );
   }
 
-  // Si no hay usuario y no está en demo mode, redirigir a Login
-  if (!user && !profile && !isDemoMode) {
+  // Si no hay sesión autenticada en Supabase, redirigir a Login
+  if (!user && !profile) {
     return <Redirect href="/(auth)/login" />;
   }
 

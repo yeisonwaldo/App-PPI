@@ -11,7 +11,6 @@ import {
   ShieldCheck,
   ChevronRight,
   HardHat,
-  ArrowRight,
 } from 'lucide-react-native';
 import { Button } from '@/components/ui/Button';
 import { useAuthStore } from '@/stores/authStore';
@@ -57,12 +56,7 @@ const FEATURES = [
 
 export default function LandingScreen() {
   const router = useRouter();
-  const { enableDemoMode } = useAuthStore();
-
-  const handleStartDemo = () => {
-    enableDemoMode();
-    router.replace('/(app)/(tabs)');
-  };
+  const { user } = useAuthStore();
 
   return (
     <SafeAreaView className="flex-1 bg-slate-50">
@@ -88,10 +82,12 @@ export default function LandingScreen() {
             </View>
 
             <TouchableOpacity
-              onPress={() => router.push('/(auth)/login')}
+              onPress={() => router.push(user ? '/(app)/(tabs)' : '/(auth)/login')}
               className="px-3.5 py-1.5 rounded-full bg-blue-50 border border-blue-200"
             >
-              <Text className="text-xs font-bold text-blue-700">Entrar</Text>
+              <Text className="text-xs font-bold text-blue-700">
+                {user ? 'Ir al Panel' : 'Entrar'}
+              </Text>
             </TouchableOpacity>
           </View>
 
@@ -112,19 +108,11 @@ export default function LandingScreen() {
 
             <View className="flex-col gap-2.5">
               <Button
-                title="Iniciar sesión"
+                title={user ? 'Continuar al Dashboard' : 'Iniciar sesión'}
                 variant="secondary"
                 size="lg"
-                onPress={() => router.push('/(auth)/login')}
+                onPress={() => router.push(user ? '/(app)/(tabs)' : '/(auth)/login')}
                 rightIcon={<ChevronRight size={18} color="#FFFFFF" />}
-              />
-              <Button
-                title="Explorar Demostración Rápida"
-                variant="outline"
-                size="md"
-                className="bg-blue-700/60 border-blue-300 text-white"
-                onPress={handleStartDemo}
-                rightIcon={<ArrowRight size={16} color="#DBEAFE" />}
               />
             </View>
           </View>
